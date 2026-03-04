@@ -1,59 +1,60 @@
-import React, { memo, useMemo } from 'react';
-import { ViewProps } from 'react-native';
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+} from 'react';
 
 //#region reanimated & gesture handler
-import {
-  TapGestureHandler,
-  LongPressGestureHandler,
-  TapGestureHandlerGestureEvent,
-  LongPressGestureHandlerGestureEvent,
-} from 'react-native-gesture-handler';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   measure,
-  runOnJS,
-  useAnimatedGestureHandler,
-  useAnimatedProps,
+  useAnimatedReaction,
   useAnimatedRef,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
-  withTiming,
   withSequence,
   withSpring,
-  useAnimatedReaction,
+  withTiming,
 } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 //#endregion
 
 //#region dependencies
-import { Portal } from '@gorhom/portal';
-import { nanoid } from 'nanoid/non-secure';
 import * as Haptics from 'expo-haptics';
 //#endregion
 
 //#region utils & types
 import {
   TransformOriginAnchorPosition,
-  getTransformOrigin,
   calculateMenuHeight,
+  getTransformOrigin,
 } from '../../utils/calculations';
 import {
-  HOLD_ITEM_TRANSFORM_DURATION,
+  CONTEXT_MENU_STATE,
   HOLD_ITEM_SCALE_DOWN_DURATION,
   HOLD_ITEM_SCALE_DOWN_VALUE,
+  HOLD_ITEM_TRANSFORM_DURATION,
   SPRING_CONFIGURATION,
   WINDOW_HEIGHT,
   WINDOW_WIDTH,
-  CONTEXT_MENU_STATE,
 } from '../../constants';
 import { useDeviceOrientation } from '../../hooks';
 import styles from './styles';
 
-import type { HoldItemProps, GestureHandlerProps } from './types';
+import type { HoldItemProps } from './types';
 import styleGuide from '../../styleGuide';
 import { useInternal } from '../../hooks';
 //#endregion
 
-type Context = { didMeasureLayout: boolean };
+let holdItemId = 0;
+
+const getNextHoldItemId = () => {
+  holdItemId += 1;
+  return `hold-item-${holdItemId}`;
+};
 
 const HoldItemComponent = ({
   items,
@@ -69,7 +70,15 @@ const HoldItemComponent = ({
   children,
 }: HoldItemProps) => {
   //#region hooks
-  const { state, menuProps, safeAreaInsets } = useInternal();
+  const {
+    state,
+    activeItemId,
+    activeOverlayId,
+    menuProps,
+    safeAreaInsets,
+    setActiveOverlay,
+    clearActiveOverlay,
+  } = useInternal();
   const deviceOrientation = useDeviceOrientation();
   //#endregion
 
@@ -87,8 +96,12 @@ const HoldItemComponent = ({
   const transformOrigin = useSharedValue<TransformOriginAnchorPosition>(
     menuAnchorPosition || 'top-right'
   );
+  const didMeasureLayout = useSharedValue(false);
+  const overlayId = useRef(getNextHoldItemId()).current;
+  const clearOverlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
 
-  const key = useMemo(() => `hold-item-${nanoid()}`, []);
   const menuHeight = useMemo(() => {
     const itemsWithSeparator = items.filter(item => item.withSeparator);
     return calculateMenuHeight(items.length, itemsWithSeparator.length);
@@ -101,21 +114,36 @@ const HoldItemComponent = ({
   const containerRef = useAnimatedRef<Animated.View>();
   //#endregion
 
+  const cancelPendingOverlayClear = useCallback(() => {
+    if (clearOverlayTimeoutRef.current) {
+      clearTimeout(clearOverlayTimeoutRef.current);
+      clearOverlayTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleOverlayClear = useCallback(() => {
+    cancelPendingOverlayClear();
+    clearOverlayTimeoutRef.current = setTimeout(() => {
+      clearActiveOverlay(overlayId);
+      clearOverlayTimeoutRef.current = null;
+    }, HOLD_ITEM_TRANSFORM_DURATION);
+  }, [cancelPendingOverlayClear, clearActiveOverlay, overlayId]);
+
   //#region functions
   const hapticResponse = () => {
     const style = !hapticFeedback ? 'Medium' : hapticFeedback;
     switch (style) {
-      case `Selection`:
+      case 'Selection':
         Haptics.selectionAsync();
         break;
-      case `Light`:
-      case `Medium`:
-      case `Heavy`:
+      case 'Light':
+      case 'Medium':
+      case 'Heavy':
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle[style]);
         break;
-      case `Success`:
-      case `Warning`:
-      case `Error`:
+      case 'Success':
+      case 'Warning':
+      case 'Error':
         Haptics.notificationAsync(Haptics.NotificationFeedbackType[style]);
         break;
       default:
@@ -124,10 +152,13 @@ const HoldItemComponent = ({
   //#endregion
 
   //#region worklet functions
-  const activateAnimation = (ctx: any) => {
+  const activateAnimation = () => {
     'worklet';
-    if (!ctx.didMeasureLayout) {
+    if (!didMeasureLayout.value) {
       const measured = measure(containerRef);
+      if (measured == null) {
+        return false;
+      }
 
       itemRectY.value = measured.pageY;
       itemRectX.value = measured.pageX;
@@ -143,7 +174,11 @@ const HoldItemComponent = ({
         );
         transformOrigin.value = position;
       }
+
+      didMeasureLayout.value = true;
     }
+
+    return true;
   };
 
   const calculateTransformValue = () => {
@@ -198,15 +233,17 @@ const HoldItemComponent = ({
     });
   };
 
-  const onCompletion = (isFinised?: boolean) => {
+  const onCompletion = (isFinished?: boolean) => {
     'worklet';
     const isListValid = items && items.length > 0;
-    if (isFinised && isListValid) {
-      state.value = CONTEXT_MENU_STATE.ACTIVE;
+    if (isFinished && isListValid && didMeasureLayout.value) {
+      activeItemId.value = overlayId;
       isActive.value = true;
+      scheduleOnRN(showOverlay);
+      state.value = CONTEXT_MENU_STATE.ACTIVE;
       scaleBack();
       if (hapticFeedback !== 'None') {
-        runOnJS(hapticResponse)();
+        scheduleOnRN(hapticResponse);
       }
     }
 
@@ -243,9 +280,7 @@ const HoldItemComponent = ({
   };
 
   /**
-   * When use tap activation ("tap") and trying to tap multiple times,
-   * scale animation is called again despite it is started. This causes a bug.
-   * To prevent this, it is better to check is animation already started.
+   * Prevent restarting the tap/double-tap animation while it is in flight.
    */
   const canCallActivateFunctions = () => {
     'worklet';
@@ -259,18 +294,11 @@ const HoldItemComponent = ({
   //#endregion
 
   //#region gesture events
-  const gestureEvent = useAnimatedGestureHandler<
-    LongPressGestureHandlerGestureEvent | TapGestureHandlerGestureEvent,
-    Context
-  >({
-    onActive: (_, context) => {
-      if (canCallActivateFunctions()) {
-        if (!context.didMeasureLayout) {
-          activateAnimation(context);
-          transformValue.value = calculateTransformValue();
-          setMenuProps();
-          context.didMeasureLayout = true;
-        }
+  const mainGesture = useMemo(() => {
+    const onStart = () => {
+      if (canCallActivateFunctions() && activateAnimation()) {
+        transformValue.value = calculateTransformValue();
+        setMenuProps();
 
         if (!isActive.value) {
           if (isHold) {
@@ -280,26 +308,44 @@ const HoldItemComponent = ({
           }
         }
       }
-    },
-    onFinish: (_, context) => {
-      context.didMeasureLayout = false;
+    };
+
+    const onFinalize = () => {
+      didMeasureLayout.value = false;
       if (isHold) {
         scaleBack();
       }
-    },
-  });
+    };
 
-  const overlayGestureEvent = useAnimatedGestureHandler<
-    TapGestureHandlerGestureEvent,
-    Context
-  >({
-    onActive: _ => {
-      if (closeOnTap) state.value = CONTEXT_MENU_STATE.END;
-    },
-  });
+    if (activateOn === 'double-tap') {
+      return Gesture.Tap()
+        .numberOfTaps(2)
+        .onStart(onStart)
+        .onFinalize(onFinalize);
+    }
+
+    if (activateOn === 'tap') {
+      return Gesture.Tap().onStart(onStart).onFinalize(onFinalize);
+    }
+
+    return Gesture.LongPress()
+      .minDuration(longPressMinDurationMs)
+      .onStart(onStart)
+      .onFinalize(onFinalize);
+  }, [activateOn, isHold, longPressMinDurationMs]);
+
+  const overlayGesture = useMemo(
+    () =>
+      Gesture.Tap().onStart(() => {
+        if (closeOnTap) {
+          state.value = CONTEXT_MENU_STATE.END;
+        }
+      }),
+    [closeOnTap, state]
+  );
   //#endregion
 
-  //#region animated styles & props
+  //#region animated styles
   const animatedContainerStyle = useAnimatedStyle(() => {
     const animateOpacity = () =>
       withDelay(HOLD_ITEM_TRANSFORM_DURATION, withTiming(1, { duration: 0 }));
@@ -315,16 +361,17 @@ const HoldItemComponent = ({
       ],
     };
   });
-  const containerStyle = React.useMemo(
+
+  const containerStyle = useMemo(
     () => [containerStyles, animatedContainerStyle],
-    [containerStyles, animatedContainerStyle]
+    [animatedContainerStyle, containerStyles]
   );
 
   const animatedPortalStyle = useAnimatedStyle(() => {
     const animateOpacity = () =>
       withDelay(HOLD_ITEM_TRANSFORM_DURATION, withTiming(0, { duration: 0 }));
 
-    let tY = calculateTransformValue();
+    const tY = calculateTransformValue();
     const transformAnimation = () =>
       disableMove
         ? 0
@@ -352,93 +399,86 @@ const HoldItemComponent = ({
       ],
     };
   });
+
   const portalContainerStyle = useMemo(
     () => [styles.holdItem, animatedPortalStyle],
     [animatedPortalStyle]
   );
+  //#endregion
 
-  const animatedPortalProps = useAnimatedProps<ViewProps>(() => ({
-    pointerEvents: isActive.value ? 'auto' : 'none',
-  }));
+  //#region overlay host
+  const portalOverlay = useMemo(
+    () => (
+      <GestureDetector gesture={overlayGesture}>
+        <Animated.View style={styles.portalOverlay} />
+      </GestureDetector>
+    ),
+    [overlayGesture]
+  );
+
+  const overlayNode = useMemo(
+    () => (
+      <Animated.View key={overlayId} pointerEvents="auto" style={portalContainerStyle}>
+        {portalOverlay}
+        {children}
+      </Animated.View>
+    ),
+    [children, overlayId, portalContainerStyle, portalOverlay]
+  );
+
+  const showOverlay = useCallback(() => {
+    cancelPendingOverlayClear();
+    setActiveOverlay({
+      id: overlayId,
+      node: overlayNode,
+    });
+  }, [cancelPendingOverlayClear, overlayId, overlayNode, setActiveOverlay]);
   //#endregion
 
   //#region animated effects
   useAnimatedReaction(
     () => state.value,
-    _state => {
-      if (_state === CONTEXT_MENU_STATE.END) {
+    currentState => {
+      if (currentState === CONTEXT_MENU_STATE.END) {
+        isActive.value = false;
+        scheduleOnRN(scheduleOverlayClear);
+      }
+    },
+    [scheduleOverlayClear, state]
+  );
+
+  useAnimatedReaction(
+    () => activeItemId.value,
+    currentActiveItemId => {
+      if (currentActiveItemId !== overlayId) {
         isActive.value = false;
       }
-    }
+    },
+    [activeItemId, overlayId]
   );
   //#endregion
 
-  //#region components
-  const GestureHandler = useMemo(() => {
-    switch (activateOn) {
-      case `double-tap`:
-        return ({ children: handlerChildren }: GestureHandlerProps) => (
-          <TapGestureHandler
-            numberOfTaps={2}
-            onHandlerStateChange={gestureEvent}
-          >
-            {handlerChildren}
-          </TapGestureHandler>
-        );
-      case `tap`:
-        return ({ children: handlerChildren }: GestureHandlerProps) => (
-          <TapGestureHandler
-            numberOfTaps={1}
-            onHandlerStateChange={gestureEvent}
-          >
-            {handlerChildren}
-          </TapGestureHandler>
-        );
-      // default is hold
-      default:
-        return ({ children: handlerChildren }: GestureHandlerProps) => (
-          <LongPressGestureHandler
-            minDurationMs={longPressMinDurationMs}
-            onHandlerStateChange={gestureEvent}
-          >
-            {handlerChildren}
-          </LongPressGestureHandler>
-        );
-    }
-  }, [activateOn, gestureEvent]);
+  useEffect(
+    () => () => {
+      cancelPendingOverlayClear();
+      clearActiveOverlay(overlayId);
+    },
+    [cancelPendingOverlayClear, clearActiveOverlay, overlayId]
+  );
 
-  const PortalOverlay = useMemo(() => {
-    return () => (
-      <TapGestureHandler
-        numberOfTaps={1}
-        onHandlerStateChange={overlayGestureEvent}
-      >
-        <Animated.View style={styles.portalOverlay} />
-      </TapGestureHandler>
-    );
-  }, [overlayGestureEvent]);
-  //#endregion
+  useEffect(() => {
+    if (activeOverlayId === overlayId) {
+      showOverlay();
+    }
+  }, [activeOverlayId, overlayId, showOverlay]);
 
   //#region render
   return (
-    <>
-      <GestureHandler>
-        <Animated.View ref={containerRef} style={containerStyle}>
-          {children}
-        </Animated.View>
-      </GestureHandler>
-
-      <Portal key={key} name={key}>
-        <Animated.View
-          key={key}
-          style={portalContainerStyle}
-          animatedProps={animatedPortalProps}
-        >
-          <PortalOverlay />
-          {children}
-        </Animated.View>
-      </Portal>
-    </>
+    <GestureDetector gesture={mainGesture}>
+      <Animated.View ref={containerRef} style={containerStyle}>
+        {children}
+      </Animated.View>
+    </GestureDetector>
   );
   //#endregion
 };

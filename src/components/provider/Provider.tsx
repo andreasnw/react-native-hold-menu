@@ -1,25 +1,34 @@
-import React, { memo, useEffect, useMemo } from 'react';
-import { PortalProvider } from '@gorhom/portal';
-import Animated, { useSharedValue, useAnimatedReaction, runOnJS } from 'react-native-reanimated';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import React, {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+import Animated, {
+  useAnimatedReaction,
+  useSharedValue,
+} from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 // Components
 import { Backdrop } from '../backdrop';
 
 // Utils
-import { InternalContext } from '../../context/internal';
-import { HoldMenuProviderProps } from './types';
-import { StateProps, Action } from './reducer';
+import {
+  ActiveOverlay,
+  InternalContext,
+} from '../../context/internal';
+import type {
+  HoldMenuIconComponentProps,
+  HoldMenuProviderProps,
+} from './types';
 import { CONTEXT_MENU_STATE } from '../../constants';
-import { MenuInternalProps } from '../menu/types';
+import type { MenuInternalProps } from '../menu/types';
 import Menu from '../menu';
 
-export interface Store {
-  state: StateProps;
-  dispatch?: React.Dispatch<Action>;
-}
-
-export let AnimatedIcon: any;
+export let AnimatedIcon: React.ComponentType<HoldMenuIconComponentProps> | null =
+  null;
 
 const ProviderComponent = ({
   children,
@@ -29,12 +38,14 @@ const ProviderComponent = ({
   onOpen,
   onClose,
 }: HoldMenuProviderProps) => {
-  if (iconComponent)
-    AnimatedIcon = Animated.createAnimatedComponent(iconComponent);
+  AnimatedIcon = iconComponent
+    ? (Animated.createAnimatedComponent(iconComponent) as React.ComponentType<HoldMenuIconComponentProps>)
+    : null;
 
   const state = useSharedValue<CONTEXT_MENU_STATE>(
     CONTEXT_MENU_STATE.UNDETERMINED
   );
+  const activeItemId = useSharedValue<string | null>(null);
   const theme = useSharedValue<'light' | 'dark'>(selectedTheme || 'light');
   const menuProps = useSharedValue<MenuInternalProps>({
     itemHeight: 0,
@@ -47,36 +58,67 @@ const ProviderComponent = ({
     transformValue: 0,
     actionParams: {},
   });
+  const [activeOverlay, setActiveOverlayState] = useState<ActiveOverlay | null>(
+    null
+  );
 
   useEffect(() => {
     theme.value = selectedTheme || 'light';
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTheme]);
 
+  const setActiveOverlay = useCallback((overlay: ActiveOverlay) => {
+    setActiveOverlayState(overlay);
+  }, []);
+
+  const clearActiveOverlay = useCallback((overlayId?: string) => {
+    setActiveOverlayState(current => {
+      if (!current) {
+        return current;
+      }
+
+      if (overlayId && current.id !== overlayId) {
+        return current;
+      }
+
+      return null;
+    });
+  }, []);
+
   useAnimatedReaction(
     () => state.value,
-    state => {
-      switch (state) {
+    currentState => {
+      switch (currentState) {
         case CONTEXT_MENU_STATE.ACTIVE: {
-          if (onOpen)
-            runOnJS(onOpen)();
-          break
+          if (onOpen) {
+            scheduleOnRN(onOpen);
+          }
+          break;
         }
         case CONTEXT_MENU_STATE.END: {
-          if (onClose)
-            runOnJS(onClose)();
-          break
+          activeItemId.value = null;
+          if (onClose) {
+            scheduleOnRN(onClose);
+          }
+          break;
+        }
+        default: {
+          break;
         }
       }
     },
-    [state]
+    [activeItemId, onClose, onOpen, state]
   );
 
   const internalContextVariables = useMemo(
     () => ({
       state,
+      activeItemId,
       theme,
       menuProps,
+      activeOverlayId: activeOverlay?.id || null,
+      setActiveOverlay,
+      clearActiveOverlay,
       safeAreaInsets: safeAreaInsets || {
         top: 0,
         bottom: 0,
@@ -84,19 +126,25 @@ const ProviderComponent = ({
         right: 0,
       },
     }),
-    [state, theme, menuProps, safeAreaInsets]
+    [
+      activeItemId,
+      activeOverlay?.id,
+      clearActiveOverlay,
+      menuProps,
+      safeAreaInsets,
+      setActiveOverlay,
+      state,
+      theme,
+    ]
   );
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <InternalContext.Provider value={internalContextVariables}>
-        <PortalProvider>
-          {children}
-          <Backdrop />
-          <Menu />
-        </PortalProvider>
-      </InternalContext.Provider>
-    </GestureHandlerRootView>
+    <InternalContext.Provider value={internalContextVariables}>
+      {children}
+      <Backdrop />
+      {activeOverlay?.node}
+      <Menu />
+    </InternalContext.Provider>
   );
 };
 
