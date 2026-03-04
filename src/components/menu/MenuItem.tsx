@@ -9,12 +9,12 @@ import { MenuItemProps } from './types';
 import { useInternal } from '../../hooks';
 import { CONTEXT_MENU_STATE } from '../../constants';
 import { BORDER_LIGHT_COLOR, BORDER_DARK_COLOR } from './constants';
-import isEqual from 'lodash.isequal';
 import { getColor } from './calculations';
 import { AnimatedIcon } from '../provider/Provider';
 
-// @ts-ignore
-const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
+const AnimatedTouchable = Animated.createAnimatedComponent(
+  TouchableOpacity as any
+);
 
 type MenuItemComponentProps = {
   item: MenuItemProps;
@@ -75,5 +75,5 @@ const MenuItemComponent = ({ item, isLast }: MenuItemComponentProps) => {
   );
 };
 
-const MenuItem = React.memo(MenuItemComponent, isEqual);
+const MenuItem = React.memo(MenuItemComponent);
 export default MenuItem;

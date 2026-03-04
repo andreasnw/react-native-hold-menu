@@ -2,7 +2,6 @@ import React from 'react';
 import { StyleSheet } from 'react-native';
 
 import Animated, {
-  runOnJS,
   useAnimatedProps,
   useAnimatedReaction,
   useAnimatedStyle,
@@ -11,6 +10,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import {
   calculateMenuHeight,
@@ -42,7 +42,7 @@ const MenuListComponent = () => {
 
   const menuHeight = useDerivedValue(() => {
     const itemsWithSeparator = menuProps.value.items.filter(
-      item => item.withSeparator
+      (item: MenuItemProps) => item.withSeparator
     );
     return calculateMenuHeight(
       menuProps.value.items.length,
@@ -53,7 +53,7 @@ const MenuListComponent = () => {
 
   const messageStyles = useAnimatedStyle(() => {
     const itemsWithSeparator = menuProps.value.items.filter(
-      item => item.withSeparator
+      (item: MenuItemProps) => item.withSeparator
     );
 
     const translate = menuAnimationAnchor(
@@ -119,7 +119,7 @@ const MenuListComponent = () => {
     () => menuProps.value.items,
     _items => {
       if (!deepEqual(_items, prevList.value)) {
-        runOnJS(setter)(_items);
+        scheduleOnRN(setter, _items);
       }
     },
     [menuProps]

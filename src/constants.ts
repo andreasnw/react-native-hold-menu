@@ -8,16 +8,12 @@ const SPRING_CONFIGURATION = {
   damping: 33,
   mass: 1.03,
   stiffness: 500,
-  restDisplacementThreshold: 0.001,
-  restSpeedThreshold: 0.001,
 };
 
 const SPRING_CONFIGURATION_MENU = {
   damping: 39,
   mass: 1.09,
   stiffness: 500,
-  restDisplacementThreshold: 0.001,
-  restSpeedThreshold: 0.001,
 };
 
 enum CONTEXT_MENU_STATE {
