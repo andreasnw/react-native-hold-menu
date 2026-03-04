@@ -1,29 +1,32 @@
-import { memo, useMemo } from 'react';
+import { memo } from 'react';
 import { StyleSheet } from 'react-native';
 import Animated, {
   useAnimatedStyle,
-  useSharedValue,
   withDelay,
   withTiming,
 } from 'react-native-reanimated';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { scheduleOnRN } from 'react-native-worklets';
+
+function logWorkletError(label: string, message: string) {
+  console.error('[react-native-hold-menu]', label, message);
+}
 
 // Components
 import { BlurView } from 'expo-blur';
 
 // Utils
-import { styles } from './styles';
 import {
-  CONTEXT_MENU_STATE,
-  HOLD_ITEM_TRANSFORM_DURATION,
-  IS_IOS,
-  WINDOW_HEIGHT,
+    CONTEXT_MENU_STATE,
+    HOLD_ITEM_TRANSFORM_DURATION,
+    IS_IOS,
+    WINDOW_HEIGHT,
 } from '../../constants';
-import {
-  BACKDROP_LIGHT_BACKGROUND_COLOR,
-  BACKDROP_DARK_BACKGROUND_COLOR,
-} from './constants';
 import { useInternal } from '../../hooks';
+import {
+    BACKDROP_DARK_BACKGROUND_COLOR,
+    BACKDROP_LIGHT_BACKGROUND_COLOR,
+} from './constants';
+import { styles } from './styles';
 
 const AnimatedBlurView = IS_IOS
   ? (Animated.createAnimatedComponent(BlurView) as any)
@@ -31,86 +34,72 @@ const AnimatedBlurView = IS_IOS
 
 const BackdropComponent = () => {
   const { state, theme } = useInternal();
-  const startX = useSharedValue(0);
-  const startY = useSharedValue(0);
-
-  const tapGesture = useMemo(
-    () =>
-      Gesture.Tap()
-        .onBegin((e) => {
-          startX.value = e.x;
-          startY.value = e.y;
-        })
-        .onEnd((e) => {
-          const distance = Math.hypot(
-            e.x - startX.value,
-            e.y - startY.value
-          );
-          const shouldClose = distance < 10;
-          const isStateActive = state.value === CONTEXT_MENU_STATE.ACTIVE;
-
-          if (shouldClose && isStateActive) {
-            state.value = CONTEXT_MENU_STATE.END;
-          }
-        })
-        .onFinalize((_, success) => {
-          if (!success) {
-            state.value = CONTEXT_MENU_STATE.END;
-          }
-        }),
-    [startX, startY, state]
-  );
 
   const animatedContainerStyle = useAnimatedStyle(() => {
-    const topValueAnimation = () =>
-      state.value === CONTEXT_MENU_STATE.ACTIVE
-        ? 0
-        : withDelay(
-            HOLD_ITEM_TRANSFORM_DURATION,
-            withTiming(WINDOW_HEIGHT, {
-              duration: 0,
-            })
-          );
-
-    const opacityValueAnimation = () =>
-      withTiming(state.value === CONTEXT_MENU_STATE.ACTIVE ? 1 : 0, {
-        duration: HOLD_ITEM_TRANSFORM_DURATION,
-      });
-
-    return {
-      top: topValueAnimation(),
-      opacity: opacityValueAnimation(),
-    };
+    try {
+      return {
+        top: state.value === CONTEXT_MENU_STATE.ACTIVE
+          ? 0
+          : withDelay(
+              HOLD_ITEM_TRANSFORM_DURATION,
+              withTiming(WINDOW_HEIGHT, {
+                duration: 0,
+              })
+            ),
+        opacity: withTiming(state.value === CONTEXT_MENU_STATE.ACTIVE ? 1 : 0, {
+          duration: HOLD_ITEM_TRANSFORM_DURATION,
+        }),
+      };
+    } catch (e) {
+      scheduleOnRN(
+        logWorkletError,
+        'Backdrop.animatedContainerStyle',
+        (e != null && typeof (e as Error).message === 'string')
+          ? (e as Error).message
+          : String(e)
+      );
+      throw e;
+    }
   });
 
   const animatedInnerContainerStyle = useAnimatedStyle(() => {
-    const backgroundColor =
-      theme.value === 'light'
-        ? BACKDROP_LIGHT_BACKGROUND_COLOR
-        : BACKDROP_DARK_BACKGROUND_COLOR;
+    try {
+      const backgroundColor =
+        theme.value === 'light'
+          ? BACKDROP_LIGHT_BACKGROUND_COLOR
+          : BACKDROP_DARK_BACKGROUND_COLOR;
 
-    return { backgroundColor };
+      return { backgroundColor };
+    } catch (e) {
+      scheduleOnRN(
+        logWorkletError,
+        'Backdrop.animatedInnerContainerStyle',
+        (e != null && typeof (e as Error).message === 'string')
+          ? (e as Error).message
+          : String(e)
+      );
+      throw e;
+    }
   }, [theme]);
 
   return (
-    <GestureDetector gesture={tapGesture}>
-      <AnimatedBlurView
-        {...(IS_IOS
-          ? {
-              tint: 'default',
-              intensity: 100,
-            }
-          : {})}
-        style={[styles.container, animatedContainerStyle]}
-      >
-        <Animated.View
-          style={[
-            { ...StyleSheet.absoluteFillObject },
-            animatedInnerContainerStyle,
-          ]}
-        />
-      </AnimatedBlurView>
-    </GestureDetector>
+    <AnimatedBlurView
+      {...(IS_IOS
+        ? {
+            tint: 'default',
+            intensity: 100,
+          }
+        : {})}
+      pointerEvents="none"
+      style={[styles.container, animatedContainerStyle]}
+    >
+      <Animated.View
+        style={[
+          { ...StyleSheet.absoluteFillObject },
+          animatedInnerContainerStyle,
+        ]}
+      />
+    </AnimatedBlurView>
   );
 };
 

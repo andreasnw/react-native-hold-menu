@@ -1,23 +1,22 @@
 import {
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
+    memo,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef
 } from 'react';
 
 //#region reanimated & gesture handler
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
-  measure,
-  useAnimatedReaction,
-  useAnimatedRef,
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withSequence,
-  withSpring,
-  withTiming,
+    measure,
+    useAnimatedReaction,
+    useAnimatedRef,
+    useAnimatedStyle,
+    useSharedValue,
+    withDelay,
+    withSequence,
+    withTiming
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 //#endregion
@@ -28,25 +27,23 @@ import * as Haptics from 'expo-haptics';
 
 //#region utils & types
 import {
-  TransformOriginAnchorPosition,
-  calculateMenuHeight,
-  getTransformOrigin,
-} from '../../utils/calculations';
-import {
-  CONTEXT_MENU_STATE,
-  HOLD_ITEM_SCALE_DOWN_DURATION,
-  HOLD_ITEM_SCALE_DOWN_VALUE,
-  HOLD_ITEM_TRANSFORM_DURATION,
-  SPRING_CONFIGURATION,
-  WINDOW_HEIGHT,
-  WINDOW_WIDTH,
+    CONTEXT_MENU_STATE,
+    HOLD_ITEM_SCALE_DOWN_DURATION,
+    HOLD_ITEM_SCALE_DOWN_VALUE,
+    HOLD_ITEM_TRANSFORM_DURATION,
+    WINDOW_HEIGHT,
+    WINDOW_WIDTH
 } from '../../constants';
 import { useDeviceOrientation } from '../../hooks';
-import styles from './styles';
+import {
+    TransformOriginAnchorPosition,
+    calculateMenuHeight,
+    getTransformOrigin,
+} from '../../utils/calculations';
 
-import type { HoldItemProps } from './types';
-import styleGuide from '../../styleGuide';
 import { useInternal } from '../../hooks';
+import styleGuide from '../../styleGuide';
+import type { HoldItemProps } from './types';
 //#endregion
 
 let holdItemId = 0;
@@ -55,6 +52,11 @@ const getNextHoldItemId = () => {
   holdItemId += 1;
   return `hold-item-${holdItemId}`;
 };
+
+/** Logs worklet errors to Metro/console when called via scheduleOnRN. */
+function logWorkletError(label: string, message: string) {
+  console.error('[react-native-hold-menu]', label, message);
+}
 
 const HoldItemComponent = ({
   items,
@@ -73,8 +75,8 @@ const HoldItemComponent = ({
   const {
     state,
     activeItemId,
-    activeOverlayId,
     menuProps,
+    setMenuData,
     safeAreaInsets,
     setActiveOverlay,
     clearActiveOverlay,
@@ -98,14 +100,23 @@ const HoldItemComponent = ({
   );
   const didMeasureLayout = useSharedValue(false);
   const overlayId = useRef(getNextHoldItemId()).current;
-  const clearOverlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null
+  const latestItemsRef = useRef(items);
+  const latestActionParamsRef = useRef<Record<string, unknown[]>>(
+    actionParams || {}
   );
+
+  latestItemsRef.current = items;
+  latestActionParamsRef.current = actionParams || {};
 
   const menuHeight = useMemo(() => {
     const itemsWithSeparator = items.filter(item => item.withSeparator);
     return calculateMenuHeight(items.length, itemsWithSeparator.length);
   }, [items]);
+  const itemCount = items.length;
+  const separatorCount = useMemo(
+    () => items.filter(item => item.withSeparator).length,
+    [items]
+  );
 
   const isHold = !activateOn || activateOn === 'hold';
   //#endregion
@@ -114,23 +125,9 @@ const HoldItemComponent = ({
   const containerRef = useAnimatedRef<Animated.View>();
   //#endregion
 
-  const cancelPendingOverlayClear = useCallback(() => {
-    if (clearOverlayTimeoutRef.current) {
-      clearTimeout(clearOverlayTimeoutRef.current);
-      clearOverlayTimeoutRef.current = null;
-    }
-  }, []);
 
-  const scheduleOverlayClear = useCallback(() => {
-    cancelPendingOverlayClear();
-    clearOverlayTimeoutRef.current = setTimeout(() => {
-      clearActiveOverlay(overlayId);
-      clearOverlayTimeoutRef.current = null;
-    }, HOLD_ITEM_TRANSFORM_DURATION);
-  }, [cancelPendingOverlayClear, clearActiveOverlay, overlayId]);
 
-  //#region functions
-  const hapticResponse = () => {
+  const triggerHapticOnRN = useCallback(() => {
     const style = !hapticFeedback ? 'Medium' : hapticFeedback;
     switch (style) {
       case 'Selection':
@@ -148,82 +145,143 @@ const HoldItemComponent = ({
         break;
       default:
     }
-  };
-  //#endregion
+  }, [hapticFeedback]);
+
+  const openOverlayOnRN = useCallback(() => {
+    setMenuData(latestItemsRef.current, latestActionParamsRef.current);
+    setActiveOverlay({
+      id: overlayId,
+      itemNode: children,
+      itemScale,
+      isActive,
+      itemRectY,
+      itemRectX,
+      itemRectWidth,
+      itemRectHeight,
+      disableMove,
+      closeOnTap,
+    });
+  }, [
+    children, disableMove, closeOnTap, isActive, itemRectHeight, itemRectWidth,
+    itemRectX, itemRectY, itemScale, overlayId, setActiveOverlay, setMenuData
+  ]);
+
+
 
   //#region worklet functions
   const activateAnimation = () => {
     'worklet';
-    if (!didMeasureLayout.value) {
-      const measured = measure(containerRef);
-      if (measured == null) {
-        return false;
+    try {
+      if (!didMeasureLayout.value) {
+        const measured = measure(containerRef);
+        if (measured == null) {
+          scheduleOnRN(
+            logWorkletError,
+            'activateAnimation',
+            'measure() returned null - element may not be mounted'
+          );
+          return false;
+        }
+
+        itemRectY.value = measured.pageY;
+        itemRectX.value = measured.pageX;
+        itemRectHeight.value = measured.height;
+        itemRectWidth.value = measured.width;
+
+        if (!menuAnchorPosition) {
+          const position = getTransformOrigin(
+            measured.pageX,
+            itemRectWidth.value,
+            deviceOrientation === 'portrait' ? WINDOW_WIDTH : WINDOW_HEIGHT,
+            bottom
+          );
+          transformOrigin.value = position;
+        }
+
+        didMeasureLayout.value = true;
       }
 
-      itemRectY.value = measured.pageY;
-      itemRectX.value = measured.pageX;
-      itemRectHeight.value = measured.height;
-      itemRectWidth.value = measured.width;
-
-      if (!menuAnchorPosition) {
-        const position = getTransformOrigin(
-          measured.pageX,
-          itemRectWidth.value,
-          deviceOrientation === 'portrait' ? WINDOW_WIDTH : WINDOW_HEIGHT,
-          bottom
-        );
-        transformOrigin.value = position;
-      }
-
-      didMeasureLayout.value = true;
+      return true;
+    } catch (e) {
+      scheduleOnRN(
+        logWorkletError,
+        'activateAnimation',
+        (e != null && typeof (e as Error).message === 'string')
+          ? (e as Error).message
+          : String(e)
+      );
+      return false;
     }
-
-    return true;
   };
 
   const calculateTransformValue = () => {
     'worklet';
+    try {
+      const height =
+        deviceOrientation === 'portrait' ? WINDOW_HEIGHT : WINDOW_WIDTH;
 
-    const height =
-      deviceOrientation === 'portrait' ? WINDOW_HEIGHT : WINDOW_WIDTH;
+      const anchor = transformOrigin.value;
+      const isAnchorPointTop =
+        typeof anchor === 'string' && anchor.includes('top');
 
-    const isAnchorPointTop = transformOrigin.value.includes('top');
+      const insetsTop = safeAreaInsets ? safeAreaInsets.top : 0;
+      const insetsBottom = safeAreaInsets ? safeAreaInsets.bottom : 0;
 
-    let tY = 0;
-    if (!disableMove) {
-      if (isAnchorPointTop) {
-        const topTransform =
-          itemRectY.value +
-          itemRectHeight.value +
-          menuHeight +
-          styleGuide.spacing +
-          (safeAreaInsets?.bottom || 0);
+      let tY = 0;
+      if (!disableMove) {
+        if (isAnchorPointTop) {
+          const topTransform =
+            itemRectY.value +
+            itemRectHeight.value +
+            menuHeight +
+            styleGuide.spacing +
+            insetsBottom;
 
-        tY = topTransform > height ? height - topTransform : 0;
-      } else {
-        const bottomTransform =
-          itemRectY.value - menuHeight - (safeAreaInsets?.top || 0);
-        tY =
-          bottomTransform < 0 ? -bottomTransform + styleGuide.spacing * 2 : 0;
+          tY = topTransform > height ? height - topTransform : 0;
+        } else {
+          const bottomTransform =
+            itemRectY.value - menuHeight - insetsTop;
+          tY =
+            bottomTransform < 0 ? -bottomTransform + styleGuide.spacing * 2 : 0;
+        }
       }
+      return tY;
+    } catch (e) {
+      scheduleOnRN(
+        logWorkletError,
+        'calculateTransformValue',
+        (e != null && typeof (e as Error).message === 'string')
+          ? (e as Error).message
+          : String(e)
+      );
+      throw e;
     }
-    return tY;
   };
 
   const setMenuProps = () => {
     'worklet';
-
-    menuProps.value = {
-      itemHeight: itemRectHeight.value,
-      itemWidth: itemRectWidth.value,
-      itemY: itemRectY.value,
-      itemX: itemRectX.value,
-      anchorPosition: transformOrigin.value,
-      menuHeight: menuHeight,
-      items,
-      transformValue: transformValue.value,
-      actionParams: actionParams || {},
-    };
+    try {
+      menuProps.value = {
+        itemHeight: itemRectHeight.value,
+        itemWidth: itemRectWidth.value,
+        itemY: itemRectY.value,
+        itemX: itemRectX.value,
+        anchorPosition: transformOrigin.value,
+        menuHeight: menuHeight,
+        transformValue: transformValue.value,
+        itemCount,
+        separatorCount: separatorCount,
+      };
+    } catch (e) {
+      scheduleOnRN(
+        logWorkletError,
+        'setMenuProps',
+        (e != null && typeof (e as Error).message === 'string')
+          ? (e as Error).message
+          : String(e)
+      );
+      throw e;
+    }
   };
 
   const scaleBack = () => {
@@ -235,21 +293,30 @@ const HoldItemComponent = ({
 
   const onCompletion = (isFinished?: boolean) => {
     'worklet';
-    const isListValid = items && items.length > 0;
-    if (isFinished && isListValid && didMeasureLayout.value) {
-      activeItemId.value = overlayId;
-      isActive.value = true;
-      scheduleOnRN(showOverlay);
-      state.value = CONTEXT_MENU_STATE.ACTIVE;
-      scaleBack();
-      if (hapticFeedback !== 'None') {
-        scheduleOnRN(hapticResponse);
+    try {
+      const isListValid = itemCount > 0;
+      if (isFinished && isListValid && didMeasureLayout.value) {
+        activeItemId.value = overlayId;
+        isActive.value = true;
+        scheduleOnRN(openOverlayOnRN);
+        state.value = CONTEXT_MENU_STATE.ACTIVE;
+        scaleBack();
+        if (hapticFeedback !== 'None') {
+          scheduleOnRN(triggerHapticOnRN);
+        }
       }
+
+      isAnimationStarted.value = false;
+    } catch (e) {
+      scheduleOnRN(
+        logWorkletError,
+        'onCompletion',
+        (e != null && typeof (e as Error).message === 'string')
+          ? (e as Error).message
+          : String(e)
+      );
+      throw e;
     }
-
-    isAnimationStarted.value = false;
-
-    // TODO: Warn user if item list is empty or not given
   };
 
   const scaleHold = () => {
@@ -296,7 +363,18 @@ const HoldItemComponent = ({
   //#region gesture events
   const mainGesture = useMemo(() => {
     const onStart = () => {
-      if (canCallActivateFunctions() && activateAnimation()) {
+      const animationActivated = activateAnimation();
+      
+      if (!animationActivated) {
+        scheduleOnRN(
+          logWorkletError,
+          'mainGesture.onStart',
+          'activateAnimation failed - menu may not appear correctly'
+        );
+        return;
+      }
+      
+      if (canCallActivateFunctions()) {
         transformValue.value = calculateTransformValue();
         setMenuProps();
 
@@ -332,34 +410,34 @@ const HoldItemComponent = ({
       .minDuration(longPressMinDurationMs)
       .onStart(onStart)
       .onFinalize(onFinalize);
-  }, [activateOn, isHold, longPressMinDurationMs]);
+  }, [activateOn, isHold, longPressMinDurationMs, itemCount, separatorCount]);
 
-  const overlayGesture = useMemo(
-    () =>
-      Gesture.Tap().onStart(() => {
-        if (closeOnTap) {
-          state.value = CONTEXT_MENU_STATE.END;
-        }
-      }),
-    [closeOnTap, state]
-  );
+
   //#endregion
 
   //#region animated styles
   const animatedContainerStyle = useAnimatedStyle(() => {
-    const animateOpacity = () =>
-      withDelay(HOLD_ITEM_TRANSFORM_DURATION, withTiming(1, { duration: 0 }));
-
-    return {
-      opacity: isActive.value ? 0 : animateOpacity(),
-      transform: [
-        {
-          scale: isActive.value
-            ? withTiming(1, { duration: HOLD_ITEM_TRANSFORM_DURATION })
-            : itemScale.value,
-        },
-      ],
-    };
+    try {
+      return {
+        opacity: isActive.value ? 0 : withDelay(HOLD_ITEM_TRANSFORM_DURATION, withTiming(1, { duration: 0 })),
+        transform: [
+          {
+            scale: isActive.value
+              ? withTiming(1, { duration: HOLD_ITEM_TRANSFORM_DURATION })
+              : itemScale.value,
+          },
+        ],
+      };
+    } catch (e) {
+      scheduleOnRN(
+        logWorkletError,
+        'animatedContainerStyle',
+        (e != null && typeof (e as Error).message === 'string')
+          ? (e as Error).message
+          : String(e)
+      );
+      throw e;
+    }
   });
 
   const containerStyle = useMemo(
@@ -367,72 +445,12 @@ const HoldItemComponent = ({
     [animatedContainerStyle, containerStyles]
   );
 
-  const animatedPortalStyle = useAnimatedStyle(() => {
-    const animateOpacity = () =>
-      withDelay(HOLD_ITEM_TRANSFORM_DURATION, withTiming(0, { duration: 0 }));
 
-    const tY = calculateTransformValue();
-    const transformAnimation = () =>
-      disableMove
-        ? 0
-        : isActive.value
-        ? withSpring(tY, SPRING_CONFIGURATION)
-        : withTiming(-0.1, { duration: HOLD_ITEM_TRANSFORM_DURATION });
 
-    return {
-      zIndex: 10,
-      position: 'absolute',
-      top: itemRectY.value,
-      left: itemRectX.value,
-      width: itemRectWidth.value,
-      height: itemRectHeight.value,
-      opacity: isActive.value ? 1 : animateOpacity(),
-      transform: [
-        {
-          translateY: transformAnimation(),
-        },
-        {
-          scale: isActive.value
-            ? withTiming(1, { duration: HOLD_ITEM_TRANSFORM_DURATION })
-            : itemScale.value,
-        },
-      ],
-    };
-  });
 
-  const portalContainerStyle = useMemo(
-    () => [styles.holdItem, animatedPortalStyle],
-    [animatedPortalStyle]
-  );
   //#endregion
 
   //#region overlay host
-  const portalOverlay = useMemo(
-    () => (
-      <GestureDetector gesture={overlayGesture}>
-        <Animated.View style={styles.portalOverlay} />
-      </GestureDetector>
-    ),
-    [overlayGesture]
-  );
-
-  const overlayNode = useMemo(
-    () => (
-      <Animated.View key={overlayId} pointerEvents="auto" style={portalContainerStyle}>
-        {portalOverlay}
-        {children}
-      </Animated.View>
-    ),
-    [children, overlayId, portalContainerStyle, portalOverlay]
-  );
-
-  const showOverlay = useCallback(() => {
-    cancelPendingOverlayClear();
-    setActiveOverlay({
-      id: overlayId,
-      node: overlayNode,
-    });
-  }, [cancelPendingOverlayClear, overlayId, overlayNode, setActiveOverlay]);
   //#endregion
 
   //#region animated effects
@@ -441,10 +459,9 @@ const HoldItemComponent = ({
     currentState => {
       if (currentState === CONTEXT_MENU_STATE.END) {
         isActive.value = false;
-        scheduleOnRN(scheduleOverlayClear);
       }
     },
-    [scheduleOverlayClear, state]
+    [state]
   );
 
   useAnimatedReaction(
@@ -460,17 +477,12 @@ const HoldItemComponent = ({
 
   useEffect(
     () => () => {
-      cancelPendingOverlayClear();
       clearActiveOverlay(overlayId);
     },
-    [cancelPendingOverlayClear, clearActiveOverlay, overlayId]
+    [clearActiveOverlay, overlayId]
   );
 
-  useEffect(() => {
-    if (activeOverlayId === overlayId) {
-      showOverlay();
-    }
-  }, [activeOverlayId, overlayId, showOverlay]);
+
 
   //#region render
   return (

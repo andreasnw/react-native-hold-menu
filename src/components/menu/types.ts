@@ -15,7 +15,6 @@ export type MenuListProps = {
 };
 
 export type MenuInternalProps = {
-  items: MenuItemProps[];
   itemHeight: number;
   itemWidth: number;
   itemY: number;
@@ -23,5 +22,6 @@ export type MenuInternalProps = {
   anchorPosition: TransformOriginAnchorPosition;
   menuHeight: number;
   transformValue: number;
-  actionParams: Record<string, unknown[]>;
+  itemCount: number;
+  separatorCount: number;
 };

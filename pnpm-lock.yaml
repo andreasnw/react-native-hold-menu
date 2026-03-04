@@ -11,6 +11,9 @@ importers:
       '@babel/core':
         specifier: ^7.29.0
         version: 7.29.0
+      '@react-navigation/native':
+        specifier: ^7.0.0
+        version: 7.1.33(react-native@0.83.0)(react@19.2.4)
       '@types/react':
         specifier: ^19.2.14
         version: 19.2.14
