@@ -1,16 +1,17 @@
-import styleGuide from '../styleGuide';
-import {
-  MENU_WIDTH,
-  MENU_TRANSFORM_ORIGIN_TOLERENCE,
-  FONT_SCALE,
-} from '../constants';
+import { Dimensions } from 'react-native';
+
+const { width: WINDOW_WIDTH } = Dimensions.get('screen');
+const MENU_WIDTH = (WINDOW_WIDTH * 60) / 100;
+const MENU_TRANSFORM_ORIGIN_TOLERENCE = 10;
+const FONT_SCALE = Dimensions.get('screen').fontScale;
+
+const ITEM_HEIGHT = 20 * FONT_SCALE + 8 * 2.5;
+const SPACING = 8;
+
 
 export const MenuItemHeight = () => {
   'worklet';
-  return (
-    styleGuide.typography.callout.lineHeight * FONT_SCALE +
-    styleGuide.spacing * 2.5
-  );
+  return ITEM_HEIGHT;
 };
 
 export const calculateMenuHeight = (
@@ -19,11 +20,12 @@ export const calculateMenuHeight = (
 ) => {
   'worklet';
   return (
-    MenuItemHeight() * itemLength +
+    ITEM_HEIGHT * itemLength +
     (itemLength - 1) +
-    separatorCount * styleGuide.spacing
+    separatorCount * SPACING
   );
 };
+
 
 export type TransformOriginAnchorPosition =
   | 'top-right'
