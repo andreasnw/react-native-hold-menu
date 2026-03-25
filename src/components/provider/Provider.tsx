@@ -14,7 +14,7 @@ import Animated, {
     withSpring,
     withTiming,
 } from 'react-native-reanimated';
-import { runOnJS } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 // Components
 import { Backdrop } from '../backdrop';
@@ -115,7 +115,7 @@ const ProviderComponent = ({
       switch (currentState) {
         case CONTEXT_MENU_STATE.ACTIVE: {
           if (onOpen) {
-            runOnJS(onOpen)();
+            scheduleOnRN(onOpen);
           }
           break;
         }
@@ -123,9 +123,9 @@ const ProviderComponent = ({
           if (previousState === CONTEXT_MENU_STATE.ACTIVE) {
             activeItemId.value = null;
           }
-          runOnJS(clearOverlayAndMenu)();
+          scheduleOnRN(clearOverlayAndMenu);
           if (onClose) {
-            runOnJS(onClose)();
+            scheduleOnRN(onClose);
           }
           break;
         }

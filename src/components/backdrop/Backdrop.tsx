@@ -5,7 +5,7 @@ import Animated, {
   withDelay,
   withTiming,
 } from 'react-native-reanimated';
-import { runOnJS } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 function logWorkletError(label: string, message: string) {
   console.error('[react-native-hold-menu]', label, message);
@@ -51,7 +51,7 @@ const BackdropComponent = () => {
         }),
       };
     } catch (e) {
-      runOnJS(logWorkletError)(
+      scheduleOnRN(logWorkletError,
         'Backdrop.animatedContainerStyle',
         (e != null && typeof (e as Error).message === 'string')
           ? (e as Error).message
@@ -70,7 +70,7 @@ const BackdropComponent = () => {
 
       return { backgroundColor };
     } catch (e) {
-      runOnJS(logWorkletError)(
+      scheduleOnRN(logWorkletError,
         'Backdrop.animatedInnerContainerStyle',
         (e != null && typeof (e as Error).message === 'string')
           ? (e as Error).message
