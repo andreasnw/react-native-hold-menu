@@ -5,7 +5,7 @@ import Animated, {
   withDelay,
   withTiming,
 } from 'react-native-reanimated';
-import { runOnJS } from 'react-native-worklets';
+import { runOnJS } from 'react-native-reanimated';
 
 function logWorkletError(label: string, message: string) {
   console.error('[react-native-hold-menu]', label, message);

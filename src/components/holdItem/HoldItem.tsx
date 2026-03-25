@@ -10,6 +10,7 @@ import {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
     measure,
+    runOnJS,
     useAnimatedReaction,
     useAnimatedRef,
     useAnimatedStyle,
@@ -18,7 +19,6 @@ import Animated, {
     withSequence,
     withTiming
 } from 'react-native-reanimated';
-import { runOnJS } from 'react-native-worklets';
 //#endregion
 
 //#region dependencies
