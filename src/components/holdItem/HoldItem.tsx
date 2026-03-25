@@ -10,6 +10,7 @@ import {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
     measure,
+    runOnJS,
     useAnimatedReaction,
     useAnimatedRef,
     useAnimatedStyle,
@@ -18,7 +19,6 @@ import Animated, {
     withSequence,
     withTiming
 } from 'react-native-reanimated';
-import { scheduleOnRN } from 'react-native-worklets';
 //#endregion
 
 //#region dependencies
@@ -175,7 +175,7 @@ const HoldItemComponent = ({
       if (!didMeasureLayout.value) {
         const measured = measure(containerRef);
         if (measured == null) {
-          scheduleOnRN(logWorkletError,
+          runOnJS(logWorkletError)(
             'activateAnimation',
             'measure() returned null - element may not be mounted'
           );
@@ -202,7 +202,7 @@ const HoldItemComponent = ({
 
       return true;
     } catch (e) {
-      scheduleOnRN(logWorkletError,
+      runOnJS(logWorkletError)(
         'activateAnimation',
         (e != null && typeof (e as Error).message === 'string')
           ? (e as Error).message
@@ -245,7 +245,7 @@ const HoldItemComponent = ({
       }
       return tY;
     } catch (e) {
-      scheduleOnRN(logWorkletError,
+      runOnJS(logWorkletError)(
         'calculateTransformValue',
         (e != null && typeof (e as Error).message === 'string')
           ? (e as Error).message
@@ -270,7 +270,7 @@ const HoldItemComponent = ({
         separatorCount: separatorCount,
       };
     } catch (e) {
-      scheduleOnRN(logWorkletError,
+      runOnJS(logWorkletError)(
         'setMenuProps',
         (e != null && typeof (e as Error).message === 'string')
           ? (e as Error).message
@@ -294,17 +294,17 @@ const HoldItemComponent = ({
       if (isFinished && isListValid && didMeasureLayout.value) {
         activeItemId.value = overlayId;
         isActive.value = true;
-        scheduleOnRN(openOverlayOnRN);
+        runOnJS(openOverlayOnRN)();
         state.value = CONTEXT_MENU_STATE.ACTIVE;
         scaleBack();
         if (hapticFeedback !== 'None') {
-          scheduleOnRN(triggerHapticOnRN);
+          runOnJS(triggerHapticOnRN)();
         }
       }
 
       isAnimationStarted.value = false;
     } catch (e) {
-      scheduleOnRN(logWorkletError,
+      runOnJS(logWorkletError)(
         'onCompletion',
         (e != null && typeof (e as Error).message === 'string')
           ? (e as Error).message
@@ -362,7 +362,7 @@ const HoldItemComponent = ({
       const animationActivated = activateAnimation();
 
       if (!animationActivated) {
-        scheduleOnRN(logWorkletError,
+        runOnJS(logWorkletError)(
           'mainGesture.onStart',
           'activateAnimation failed - menu may not appear correctly'
         );
@@ -425,7 +425,7 @@ const HoldItemComponent = ({
         ],
       };
     } catch (e) {
-      scheduleOnRN(logWorkletError,
+      runOnJS(logWorkletError)(
         'animatedContainerStyle',
         (e != null && typeof (e as Error).message === 'string')
           ? (e as Error).message

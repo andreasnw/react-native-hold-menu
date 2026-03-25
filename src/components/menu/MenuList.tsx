@@ -8,7 +8,7 @@ import Animated, {
     withSpring,
     withTiming,
 } from 'react-native-reanimated';
-import { scheduleOnRN } from 'react-native-worklets';
+import { runOnJS } from 'react-native-reanimated';
 
 function logWorkletError(label: string, message: string) {
   console.error('[react-native-hold-menu]', label, message);
@@ -62,7 +62,7 @@ const MenuListComponent = () => {
         separatorCount || 0
       );
     } catch (e) {
-      scheduleOnRN(logWorkletError,
+      runOnJS(logWorkletError)(
         'MenuList.menuHeight',
         (e != null && typeof (e as Error).message === 'string')
           ? (e as Error).message
@@ -112,7 +112,7 @@ const MenuListComponent = () => {
         ],
       };
     } catch (e) {
-      scheduleOnRN(logWorkletError,
+      runOnJS(logWorkletError)(
         'MenuList.messageStyles',
         (e != null && typeof (e as Error).message === 'string')
           ? (e as Error).message
@@ -141,7 +141,7 @@ const MenuListComponent = () => {
             : 'rgba(39, 39, 39, .8)',
       };
     } catch (e) {
-      scheduleOnRN(logWorkletError,
+      runOnJS(logWorkletError)(
         'MenuList.animatedInnerContainerStyle',
         (e != null && typeof (e as Error).message === 'string')
           ? (e as Error).message
@@ -155,7 +155,7 @@ const MenuListComponent = () => {
     try {
       return { tint: theme.value };
     } catch (e) {
-      scheduleOnRN(logWorkletError,
+      runOnJS(logWorkletError)(
         'MenuList.animatedProps',
         (e != null && typeof (e as Error).message === 'string')
           ? (e as Error).message
