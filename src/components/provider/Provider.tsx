@@ -71,6 +71,8 @@ const ProviderComponent = ({
     null
   );
   const [modalVisible, setModalVisible] = useState(false);
+  // Shared value trigger: forces useAnimatedStyle to re-evaluate when React state changes
+  const overlayVersion = useSharedValue(0);
 
 
   useEffect(() => {
@@ -81,6 +83,11 @@ const ProviderComponent = ({
   const setActiveOverlay = useCallback((overlay: ActiveOverlay) => {
     setActiveOverlayState(overlay);
   }, []);
+
+  // Sync React state → shared value trigger (runs AFTER render, so closure is updated)
+  useEffect(() => {
+    overlayVersion.value = overlayVersion.value + 1;
+  }, [activeOverlay, overlayVersion]);
 
   const clearActiveOverlay = useCallback((overlayId?: string) => {
     setActiveOverlayState(current => {
@@ -214,6 +221,8 @@ const ProviderComponent = ({
   }, [activeOverlay?.closeOnTap, state]);
 
   const animatedOverlayStyle = useAnimatedStyle(() => {
+    // Read overlayVersion to force re-evaluation when activeOverlay changes
+    const _v = overlayVersion.value;
     if (!activeOverlay) {
       return {
         zIndex: 9999,
@@ -254,6 +263,8 @@ const ProviderComponent = ({
   }, [activeOverlay, menuProps]);
 
   const animatedItemRowStyle = useAnimatedStyle(() => {
+    // Read overlayVersion to force re-evaluation when activeOverlay changes
+    const _v = overlayVersion.value;
     if (!activeOverlay) {
       return {
         minHeight: 0,
@@ -289,14 +300,12 @@ const ProviderComponent = ({
           <Pressable style={StyleSheet.absoluteFillObject} onPress={closeMenuFromRN}>
             <Backdrop />
           </Pressable>
-          {activeOverlay ? (
-            <Animated.View key={activeOverlay.id} pointerEvents="box-none" style={animatedOverlayStyle}>
+          <Animated.View pointerEvents="box-none" style={animatedOverlayStyle}>
               <Animated.View style={[styles.overlayItemRow, animatedItemRowStyle]}>
                 <Pressable style={StyleSheet.absoluteFillObject} onPress={closeOverlayItemFromRN} />
-                {activeOverlay.itemNode}
+                {activeOverlay?.itemNode}
               </Animated.View>
             </Animated.View>
-          ) : null}
           <Menu />
         </View>
       </Modal>
