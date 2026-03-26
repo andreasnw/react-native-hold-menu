@@ -70,6 +70,7 @@ const ProviderComponent = ({
   const [activeOverlay, setActiveOverlayState] = useState<ActiveOverlay | null>(
     null
   );
+  const [modalVisible, setModalVisible] = useState(false);
 
 
   useEffect(() => {
@@ -101,6 +102,15 @@ const ProviderComponent = ({
     setMenuActionParams({});
   }, []);
 
+  const dismissMenu = useCallback(() => {
+    // Keep modal visible while closing animations play,
+    // then clean up everything after animations complete
+    setTimeout(() => {
+      setModalVisible(false);
+      clearOverlayAndMenu();
+    }, HOLD_ITEM_TRANSFORM_DURATION + 50);
+  }, [clearOverlayAndMenu]);
+
   const setMenuData = useCallback(
     (items: MenuItemProps[], actionParams: Record<string, unknown[]>) => {
       setMenuItems(items);
@@ -114,6 +124,7 @@ const ProviderComponent = ({
     (currentState, previousState) => {
       switch (currentState) {
         case CONTEXT_MENU_STATE.ACTIVE: {
+          runOnJS(setModalVisible)(true);
           if (onOpen) {
             runOnJS(onOpen)();
           }
@@ -123,7 +134,7 @@ const ProviderComponent = ({
           if (previousState === CONTEXT_MENU_STATE.ACTIVE) {
             activeItemId.value = null;
           }
-          runOnJS(clearOverlayAndMenu)();
+          runOnJS(dismissMenu)();
           if (onClose) {
             runOnJS(onClose)();
           }
@@ -139,6 +150,7 @@ const ProviderComponent = ({
       onClose,
       onOpen,
       clearOverlayAndMenu,
+      dismissMenu,
       state,
     ]
   );
@@ -227,6 +239,7 @@ const ProviderComponent = ({
       top: itemRectY.value,
       left: 0,
       width: WINDOW_WIDTH,
+      overflow: 'visible' as const,
       opacity: isActive.value ? 1 : withDelay(HOLD_ITEM_TRANSFORM_DURATION, withTiming(0, { duration: 0 })),
       transform: [
         {
@@ -262,7 +275,7 @@ const ProviderComponent = ({
     <InternalContext.Provider value={internalContextVariables}>
       {children}
       <Modal
-        visible={state.value === CONTEXT_MENU_STATE.ACTIVE || !!activeOverlay}
+        visible={modalVisible}
         transparent={true}
         animationType="none"
         statusBarTranslucent={true}
@@ -270,7 +283,7 @@ const ProviderComponent = ({
       >
         <View
           pointerEvents="box-none"
-          style={[StyleSheet.absoluteFillObject, { zIndex: 9998 }]}
+          style={[StyleSheet.absoluteFillObject, { zIndex: 9998, overflow: 'visible' }]}
           collapsable={false}
         >
           <Pressable style={StyleSheet.absoluteFillObject} onPress={closeMenuFromRN}>

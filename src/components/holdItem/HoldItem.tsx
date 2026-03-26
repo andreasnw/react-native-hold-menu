@@ -15,7 +15,6 @@ import Animated, {
     useAnimatedRef,
     useAnimatedStyle,
     useSharedValue,
-    withDelay,
     withSequence,
     withTiming
 } from 'react-native-reanimated';
@@ -227,20 +226,61 @@ const HoldItemComponent = ({
 
       let tY = 0;
       if (!disableMove) {
+        const comboHeight = itemRectHeight.value + menuHeight + styleGuide.spacing;
+        const safeHeight = height - insetsTop - insetsBottom;
+
         if (isAnchorPointTop) {
-          const topTransform =
+          // Menu appears BELOW the item
+          const bottomEdge =
             itemRectY.value +
             itemRectHeight.value +
             menuHeight +
             styleGuide.spacing +
             insetsBottom;
 
-          tY = topTransform > height ? height - topTransform : 0;
+          const bottomOverflow = bottomEdge > height;
+          const topOffscreen = itemRectY.value < 0;
+
+          if (bottomOverflow || topOffscreen) {
+            if (comboHeight <= safeHeight) {
+              // Combo fits on screen — center it
+              const centerY = safeHeight / 2 + insetsTop;
+              const comboCenter = itemRectY.value + comboHeight / 2;
+              tY = centerY - comboCenter;
+            } else {
+              // Too tall to center — shift minimum to keep menu visible
+              if (bottomOverflow) {
+                tY = height - bottomEdge;
+              } else {
+                tY = insetsTop - itemRectY.value;
+              }
+            }
+          }
         } else {
-          const bottomTransform =
-            itemRectY.value - menuHeight - insetsTop;
-          tY =
-            bottomTransform < 0 ? -bottomTransform + styleGuide.spacing * 2 : 0;
+          // Menu appears ABOVE the item
+          const topEdge =
+            itemRectY.value - menuHeight - styleGuide.spacing;
+
+          const topOverflow = topEdge < insetsTop;
+          const bottomOffscreen = itemRectY.value + itemRectHeight.value > height;
+
+          if (topOverflow || bottomOffscreen) {
+            if (comboHeight <= safeHeight) {
+              // Combo fits — center it
+              const centerY = safeHeight / 2 + insetsTop;
+              const comboTop = itemRectY.value - menuHeight - styleGuide.spacing;
+              const comboBottom = itemRectY.value + itemRectHeight.value;
+              const comboCenter = (comboTop + comboBottom) / 2;
+              tY = centerY - comboCenter;
+            } else {
+              // Too tall — shift minimum to keep menu visible
+              if (topOverflow) {
+                tY = insetsTop - topEdge;
+              } else {
+                tY = height - insetsBottom - itemRectHeight.value - itemRectY.value;
+              }
+            }
+          }
         }
       }
       return tY;
@@ -415,7 +455,6 @@ const HoldItemComponent = ({
   const animatedContainerStyle = useAnimatedStyle(() => {
     try {
       return {
-        opacity: isActive.value ? 0 : withDelay(HOLD_ITEM_TRANSFORM_DURATION, withTiming(1, { duration: 0 })),
         transform: [
           {
             scale: isActive.value

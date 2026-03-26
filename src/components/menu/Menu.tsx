@@ -2,6 +2,7 @@ import React from 'react';
 
 import Animated, {
   useAnimatedStyle,
+  useDerivedValue,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
@@ -19,6 +20,13 @@ import {
 const MenuComponent = () => {
   const { state, menuProps } = useInternal();
 
+  const animatedTranslateY = useDerivedValue(() => {
+    const tY = menuProps.value.transformValue || 0;
+    return state.value === CONTEXT_MENU_STATE.ACTIVE
+      ? withSpring(tY, SPRING_CONFIGURATION)
+      : withTiming(0, { duration: HOLD_ITEM_TRANSFORM_DURATION });
+  }, [state, menuProps]);
+
   const wrapperStyles = useAnimatedStyle(() => {
     // Add fallback values to prevent errors when menuProps are not yet initialized
     const anchorPosition = menuProps.value.anchorPosition || 'top-center';
@@ -27,12 +35,11 @@ const MenuComponent = () => {
     const itemY = menuProps.value.itemY || 0;
     const itemX = menuProps.value.itemX || 0;
     const itemWidth = menuProps.value.itemWidth || 0;
-    const tY = menuProps.value.transformValue || 0;
 
     const top =
       anchorPositionVertical === 'top'
-        ? itemHeight + itemY + 8
-        : itemY - 8;
+        ? itemHeight + itemY + 16
+        : itemY - 16;
     const left = itemX;
     const width = itemWidth;
 
@@ -42,14 +49,11 @@ const MenuComponent = () => {
       width,
       transform: [
         {
-          translateY:
-            state.value === CONTEXT_MENU_STATE.ACTIVE
-              ? withSpring(tY, SPRING_CONFIGURATION)
-              : withTiming(0, { duration: HOLD_ITEM_TRANSFORM_DURATION }),
+          translateY: animatedTranslateY.value,
         },
       ],
     };
-  }, [menuProps]);
+  }, [menuProps, animatedTranslateY]);
 
   return (
     <Animated.View style={[styles.menuWrapper, wrapperStyles]}>

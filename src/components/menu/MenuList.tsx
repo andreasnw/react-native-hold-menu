@@ -72,6 +72,18 @@ const MenuListComponent = () => {
     }
   }, [menuProps, itemCountFromJS, separatorCountFromJS]);
 
+  const animatedScale = useDerivedValue(() => {
+    return state.value === CONTEXT_MENU_STATE.ACTIVE
+      ? withSpring(1, SPRING_CONFIGURATION_MENU)
+      : withTiming(0, { duration: HOLD_ITEM_TRANSFORM_DURATION });
+  }, [state]);
+
+  const animatedOpacity = useDerivedValue(() => {
+    return withTiming(state.value === CONTEXT_MENU_STATE.ACTIVE ? 1 : 0, {
+      duration: HOLD_ITEM_TRANSFORM_DURATION,
+    });
+  }, [state]);
+
   const messageStyles = useAnimatedStyle(() => {
     try {
       // Add fallback values to prevent errors when menuProps are not initialized
@@ -94,18 +106,12 @@ const MenuListComponent = () => {
       return {
         left: _leftPosition,
         height: menuHeight.value,
-        opacity: withTiming(state.value === CONTEXT_MENU_STATE.ACTIVE ? 1 : 0, {
-          duration: HOLD_ITEM_TRANSFORM_DURATION,
-        }),
+        opacity: animatedOpacity.value,
         transform: [
           { translateX: translate.beginningTransformations.translateX },
           { translateY: translate.beginningTransformations.translateY },
           {
-            scale: state.value === CONTEXT_MENU_STATE.ACTIVE
-              ? withSpring(1, SPRING_CONFIGURATION_MENU)
-              : withTiming(0, {
-                  duration: HOLD_ITEM_TRANSFORM_DURATION,
-                }),
+            scale: animatedScale.value,
           },
           { translateX: translate.endingTransformations.translateX },
           { translateY: translate.endingTransformations.translateY },
@@ -126,7 +132,7 @@ const MenuListComponent = () => {
         transform: [{ scale: 0 }],
       };
     }
-  }, [itemCountFromJS, separatorCountFromJS]);
+  }, [itemCountFromJS, separatorCountFromJS, animatedOpacity, animatedScale]);
 
   const animatedInnerContainerStyle = useAnimatedStyle(() => {
     try {
