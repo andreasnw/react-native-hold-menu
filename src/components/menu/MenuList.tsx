@@ -165,6 +165,23 @@ const MenuListComponent = () => {
     }
   }, [theme]);
 
+  // Fallback to Animated.View for iOS if expo-blur causes crashes
+  if (IS_IOS) {
+    return (
+      <Animated.View style={[styles.menuContainer, messageStyles, { backgroundColor: 'transparent' }]}>
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFillObject,
+            styles.menuInnerContainer,
+            animatedInnerContainerStyle,
+          ]}
+        >
+          <MenuItems items={menuItems} />
+        </Animated.View>
+      </Animated.View>
+    );
+  }
+
   return (
     <AnimatedView
       intensity={100}

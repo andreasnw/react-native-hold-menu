@@ -5,13 +5,11 @@ const MENU_WIDTH = (WINDOW_WIDTH * 60) / 100;
 const MENU_TRANSFORM_ORIGIN_TOLERENCE = 10;
 const FONT_SCALE = Dimensions.get('screen').fontScale;
 
-const ITEM_HEIGHT = 20 * FONT_SCALE + 8 * 2.5;
-const SPACING = 8;
-
 
 export const MenuItemHeight = () => {
   'worklet';
-  return ITEM_HEIGHT;
+  const itemHeight = 20 * (FONT_SCALE || 1) + 8 * 2.5;
+  return itemHeight;
 };
 
 export const calculateMenuHeight = (
@@ -19,10 +17,12 @@ export const calculateMenuHeight = (
   separatorCount: number
 ) => {
   'worklet';
+  const itemHeight = 20 * (FONT_SCALE || 1) + 8 * 2.5;
+  const spacing = 8;
   return (
-    ITEM_HEIGHT * itemLength +
-    (itemLength - 1) +
-    separatorCount * SPACING
+    itemHeight * itemLength +
+    (itemLength > 0 ? itemLength - 1 : 0) +
+    separatorCount * spacing
   );
 };
 
@@ -47,7 +47,8 @@ export const menuAnimationAnchor = (
     typeof anchorPoint === 'string' ? anchorPoint : 'top-center';
   const splittetAnchorName: string[] = anchor.split('-');
 
-  const Center1 = itemWidth;
+  // Fix: Center anchors do not require any horizontal offset from the center
+  const Center1 = 0;
   const Center2 = 0;
 
   const TyTop1 = -(MenuHeight / 2);
