@@ -255,7 +255,7 @@ const ProviderComponent = ({
           translateY: disableMove
             ? 0
             : isActive.value
-            ? withSpring(menuProps.value.transformValue, SPRING_CONFIGURATION)
+            ? withTiming(menuProps.value.transformValue, { duration: HOLD_ITEM_TRANSFORM_DURATION })
             : withTiming(-0.1, { duration: HOLD_ITEM_TRANSFORM_DURATION }),
         },
       ],

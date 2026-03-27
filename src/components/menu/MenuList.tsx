@@ -74,13 +74,13 @@ const MenuListComponent = () => {
 
   const animatedScale = useDerivedValue(() => {
     return state.value === CONTEXT_MENU_STATE.ACTIVE
-      ? withSpring(1, SPRING_CONFIGURATION_MENU)
+      ? withTiming(1, { duration: HOLD_ITEM_TRANSFORM_DURATION })
       : withTiming(0, { duration: HOLD_ITEM_TRANSFORM_DURATION });
   }, [state]);
 
   const animatedOpacity = useDerivedValue(() => {
     return withTiming(state.value === CONTEXT_MENU_STATE.ACTIVE ? 1 : 0, {
-      duration: HOLD_ITEM_TRANSFORM_DURATION,
+      duration: state.value === CONTEXT_MENU_STATE.ACTIVE ? HOLD_ITEM_TRANSFORM_DURATION : 50,
     });
   }, [state]);
 

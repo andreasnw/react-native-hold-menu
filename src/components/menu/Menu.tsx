@@ -23,7 +23,7 @@ const MenuComponent = () => {
   const animatedTranslateY = useDerivedValue(() => {
     const tY = menuProps.value.transformValue || 0;
     return state.value === CONTEXT_MENU_STATE.ACTIVE
-      ? withSpring(tY, SPRING_CONFIGURATION)
+      ? withTiming(tY, { duration: HOLD_ITEM_TRANSFORM_DURATION })
       : withTiming(0, { duration: HOLD_ITEM_TRANSFORM_DURATION });
   }, [state, menuProps]);
 
