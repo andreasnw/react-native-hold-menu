@@ -17,7 +17,6 @@ function logWorkletError(label: string, message: string) {
 import { BlurView } from 'expo-blur';
 import {
     calculateMenuHeight,
-    menuAnimationAnchor,
 } from '../../utils/calculations';
 
 import MenuItems from './MenuItems';
@@ -71,12 +70,7 @@ const MenuListComponent = () => {
       return 0;
     }
   }, [menuProps, itemCountFromJS, separatorCountFromJS]);
-
-  const animatedScale = useDerivedValue(() => {
-    return state.value === CONTEXT_MENU_STATE.ACTIVE
-      ? withTiming(1, { duration: HOLD_ITEM_TRANSFORM_DURATION })
-      : withTiming(0, { duration: HOLD_ITEM_TRANSFORM_DURATION });
-  }, [state]);
+  // Scale animation intentionally removed to only use fade.
 
   const animatedOpacity = useDerivedValue(() => {
     return withTiming(state.value === CONTEXT_MENU_STATE.ACTIVE ? 1 : 0, {
@@ -87,19 +81,6 @@ const MenuListComponent = () => {
   const messageStyles = useAnimatedStyle(() => {
     try {
       // Add fallback values to prevent errors when menuProps are not initialized
-      const anchorPosition = menuProps.value.anchorPosition || 'top-center';
-      const itemWidth = menuProps.value.itemWidth || 0;
-      const itemCount = menuProps.value.itemCount > 0 ? menuProps.value.itemCount : itemCountFromJS;
-      const separatorCount = menuProps.value.itemCount > 0
-        ? menuProps.value.separatorCount
-        : (separatorCountFromJS || 0);
-
-      const translate = menuAnimationAnchor(
-        anchorPosition,
-        itemWidth,
-        itemCount,
-        separatorCount
-      );
 
       const _leftPosition = leftOrRight(menuProps);
 
@@ -107,15 +88,7 @@ const MenuListComponent = () => {
         left: _leftPosition,
         height: menuHeight.value,
         opacity: animatedOpacity.value,
-        transform: [
-          { translateX: translate.beginningTransformations.translateX },
-          { translateY: translate.beginningTransformations.translateY },
-          {
-            scale: animatedScale.value,
-          },
-          { translateX: translate.endingTransformations.translateX },
-          { translateY: translate.endingTransformations.translateY },
-        ],
+        // pure fade animation without translating or scaling from origin
       };
     } catch (e) {
       runOnJS(logWorkletError)(
@@ -129,10 +102,9 @@ const MenuListComponent = () => {
         left: 0,
         height: 0,
         opacity: 0,
-        transform: [{ scale: 0 }],
       };
     }
-  }, [itemCountFromJS, separatorCountFromJS, animatedOpacity, animatedScale]);
+  }, [itemCountFromJS, separatorCountFromJS, animatedOpacity]);
 
   const animatedInnerContainerStyle = useAnimatedStyle(() => {
     try {
