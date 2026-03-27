@@ -1,7 +1,9 @@
 import { memo } from 'react';
 import { StyleSheet } from 'react-native';
 import Animated, {
+  useAnimatedReaction,
   useAnimatedStyle,
+  useSharedValue,
   withDelay,
   withTiming,
 } from 'react-native-reanimated';
@@ -34,6 +36,19 @@ const AnimatedBlurView = IS_IOS
 
 const BackdropComponent = () => {
   const { state, theme } = useInternal();
+  const opacity = useSharedValue(0);
+
+  useAnimatedReaction(
+    () => state.value,
+    (currentState) => {
+      if (currentState === CONTEXT_MENU_STATE.ACTIVE) {
+        opacity.value = withTiming(1, { duration: HOLD_ITEM_TRANSFORM_DURATION });
+      } else {
+        opacity.value = withTiming(0, { duration: HOLD_ITEM_TRANSFORM_DURATION });
+      }
+    },
+    [state]
+  );
 
   const animatedContainerStyle = useAnimatedStyle(() => {
     try {
@@ -46,9 +61,7 @@ const BackdropComponent = () => {
                 duration: 0,
               })
             ),
-        opacity: withTiming(state.value === CONTEXT_MENU_STATE.ACTIVE ? 1 : 0, {
-          duration: HOLD_ITEM_TRANSFORM_DURATION,
-        }),
+        opacity: opacity.value,
       };
     } catch (e) {
       runOnJS(logWorkletError)(
