@@ -5,15 +5,15 @@ const HOLD_ITEM_SCALE_DOWN_VALUE = 0.95;
 const HOLD_ITEM_SCALE_DOWN_DURATION = 210;
 
 const SPRING_CONFIGURATION = {
-    damping: 33,
-    mass: 1.03,
-    stiffness: 500,
+    damping: 30,
+    mass: 1,
+    stiffness: 250,
 };
 
 const SPRING_CONFIGURATION_MENU = {
-    damping: 39,
-    mass: 1.09,
-    stiffness: 500,
+    damping: 30,
+    mass: 1,
+    stiffness: 250,
 };
 
 enum CONTEXT_MENU_STATE {
