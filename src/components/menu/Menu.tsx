@@ -20,12 +20,11 @@ import {
 const MenuComponent = () => {
   const { state, menuProps } = useInternal();
 
-  const animatedTranslateY = useDerivedValue(() => {
-    const tY = menuProps.value.transformValue || 0;
+  const animatedOpacity = useDerivedValue(() => {
     return state.value === CONTEXT_MENU_STATE.ACTIVE
-      ? withTiming(tY, { duration: HOLD_ITEM_TRANSFORM_DURATION })
-      : withTiming(0, { duration: HOLD_ITEM_TRANSFORM_DURATION });
-  }, [state, menuProps]);
+      ? withTiming(1, { duration: HOLD_ITEM_TRANSFORM_DURATION })
+      : withTiming(0, { duration: 50 });
+  }, [state]);
 
   const wrapperStyles = useAnimatedStyle(() => {
     // Add fallback values to prevent errors when menuProps are not yet initialized
@@ -47,13 +46,9 @@ const MenuComponent = () => {
       top,
       left,
       width,
-      transform: [
-        {
-          translateY: animatedTranslateY.value,
-        },
-      ],
+      opacity: animatedOpacity.value,
     };
-  }, [menuProps, animatedTranslateY]);
+  }, [menuProps, animatedOpacity]);
 
   return (
     <Animated.View style={[styles.menuWrapper, wrapperStyles]}>
