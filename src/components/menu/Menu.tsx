@@ -4,6 +4,7 @@ import Animated, {
   useAnimatedStyle,
   useDerivedValue,
   withSpring,
+  withDelay,
   withTiming,
 } from 'react-native-reanimated';
 
@@ -19,6 +20,13 @@ import {
 
 const MenuComponent = () => {
   const { state, menuProps } = useInternal();
+
+  const animatedTranslateY = useDerivedValue(() => {
+    const tY = menuProps.value.transformValue || 0;
+    return state.value === CONTEXT_MENU_STATE.ACTIVE
+      ? withTiming(tY, { duration: HOLD_ITEM_TRANSFORM_DURATION })
+      : withDelay(100, withTiming(0, { duration: HOLD_ITEM_TRANSFORM_DURATION }));
+  }, [state, menuProps]);
 
   const animatedOpacity = useDerivedValue(() => {
     return state.value === CONTEXT_MENU_STATE.ACTIVE
@@ -47,8 +55,13 @@ const MenuComponent = () => {
       left,
       width,
       opacity: animatedOpacity.value,
+      transform: [
+        {
+          translateY: animatedTranslateY.value,
+        },
+      ],
     };
-  }, [menuProps, animatedOpacity]);
+  }, [menuProps, animatedOpacity, animatedTranslateY]);
 
   return (
     <Animated.View style={[styles.menuWrapper, wrapperStyles]}>
