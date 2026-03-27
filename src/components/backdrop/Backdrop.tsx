@@ -44,7 +44,7 @@ const BackdropComponent = () => {
       if (currentState === CONTEXT_MENU_STATE.ACTIVE) {
         opacity.value = withTiming(1, { duration: HOLD_ITEM_TRANSFORM_DURATION });
       } else {
-        opacity.value = withTiming(0, { duration: HOLD_ITEM_TRANSFORM_DURATION });
+        opacity.value = withDelay(100, withTiming(0, { duration: HOLD_ITEM_TRANSFORM_DURATION }));
       }
     },
     [state]

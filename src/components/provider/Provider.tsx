@@ -115,7 +115,7 @@ const ProviderComponent = ({
     setTimeout(() => {
       setModalVisible(false);
       clearOverlayAndMenu();
-    }, HOLD_ITEM_TRANSFORM_DURATION + 50);
+    }, HOLD_ITEM_TRANSFORM_DURATION + 150);
   }, [clearOverlayAndMenu]);
 
   const setMenuData = useCallback(
@@ -249,14 +249,14 @@ const ProviderComponent = ({
       left: 0,
       width: WINDOW_WIDTH,
       overflow: 'visible' as const,
-      opacity: isActive.value ? 1 : withDelay(HOLD_ITEM_TRANSFORM_DURATION, withTiming(0, { duration: 0 })),
+      opacity: isActive.value ? 1 : withDelay(HOLD_ITEM_TRANSFORM_DURATION + 100, withTiming(0, { duration: 0 })),
       transform: [
         {
           translateY: disableMove
             ? 0
             : isActive.value
             ? withTiming(menuProps.value.transformValue, { duration: HOLD_ITEM_TRANSFORM_DURATION })
-            : withTiming(-0.1, { duration: HOLD_ITEM_TRANSFORM_DURATION }),
+            : withDelay(100, withTiming(-0.1, { duration: HOLD_ITEM_TRANSFORM_DURATION })),
         },
       ],
     };
