@@ -1,18 +1,17 @@
 import React, {
-    memo,
-    useCallback,
-    useEffect,
-    useMemo,
-    useState
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState
 } from 'react';
 import { StyleSheet, View, Modal, Pressable } from 'react-native';
 import Animated, {
-    useAnimatedReaction,
-    useAnimatedStyle,
-    useSharedValue,
-    withDelay,
-    withSpring,
-    withTiming,
+  useAnimatedReaction,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
 } from 'react-native-reanimated';
 import { runOnJS } from 'react-native-reanimated';
 
@@ -27,14 +26,14 @@ import {
   WINDOW_WIDTH,
 } from '../../constants';
 import {
-    ActiveOverlay,
-    InternalContext,
+  ActiveOverlay,
+  InternalContext,
 } from '../../context/internal';
 import Menu from '../menu';
 import type { MenuInternalProps, MenuItemProps } from '../menu/types';
 import type {
-    HoldMenuIconComponentProps,
-    HoldMenuProviderProps,
+  HoldMenuIconComponentProps,
+  HoldMenuProviderProps,
 } from './types';
 
 
@@ -220,67 +219,22 @@ const ProviderComponent = ({
     }
   }, [activeOverlay?.closeOnTap, state]);
 
-  const animatedOverlayStyle = useAnimatedStyle(() => {
-    // Read overlayVersion to force re-evaluation when activeOverlay changes
-    const _v = overlayVersion.value;
-    if (!activeOverlay) {
-      return {
-        zIndex: 9999,
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: WINDOW_WIDTH,
-        height: 0,
-        opacity: 0,
-        transform: [{ translateY: 0 }],
-      };
-    }
-
-    const {
-      isActive,
-      itemRectY,
-      disableMove,
-    } = activeOverlay;
+  const animatedWrapperStyle = useAnimatedStyle(() => {
+    const isAnimActive = state.value === CONTEXT_MENU_STATE.ACTIVE;
+    const disableMove = activeOverlay ? activeOverlay.disableMove : false;
 
     return {
-      zIndex: 9999,
-      position: 'absolute',
-      top: itemRectY.value,
-      left: 0,
-      width: WINDOW_WIDTH,
-      overflow: 'visible' as const,
-      opacity: isActive.value ? 1 : withDelay(HOLD_ITEM_TRANSFORM_DURATION + 100, withTiming(0, { duration: 0 })),
       transform: [
         {
           translateY: disableMove
             ? 0
-            : isActive.value
-            ? withTiming(menuProps.value.transformValue, { duration: HOLD_ITEM_TRANSFORM_DURATION })
-            : withDelay(100, withTiming(-0.1, { duration: HOLD_ITEM_TRANSFORM_DURATION })),
+            : isAnimActive
+              ? withTiming(menuProps.value.transformValue, { duration: HOLD_ITEM_TRANSFORM_DURATION })
+              : withTiming(0, { duration: HOLD_ITEM_TRANSFORM_DURATION }),
         },
       ],
     };
-  }, [activeOverlay, menuProps]);
-
-  const animatedItemRowStyle = useAnimatedStyle(() => {
-    // Read overlayVersion to force re-evaluation when activeOverlay changes
-    const _v = overlayVersion.value;
-    if (!activeOverlay) {
-      return {
-        minHeight: 0,
-        width: 0,
-        marginLeft: 0,
-        alignItems: 'flex-start' as const,
-      };
-    }
-
-    return {
-      minHeight: activeOverlay.itemRectHeight.value,
-      width: activeOverlay.itemRectWidth.value,
-      marginLeft: Math.max(0, activeOverlay.itemRectX.value),
-      alignItems: 'flex-start' as const,
-    };
-  }, [activeOverlay]);
+  });
 
   return (
     <InternalContext.Provider value={internalContextVariables}>
@@ -300,12 +254,35 @@ const ProviderComponent = ({
           <Pressable style={StyleSheet.absoluteFillObject} onPress={closeMenuFromRN}>
             <Backdrop />
           </Pressable>
-          <Animated.View pointerEvents="box-none" style={animatedOverlayStyle}>
-              <Animated.View style={[styles.overlayItemRow, animatedItemRowStyle]}>
-                <Pressable style={StyleSheet.absoluteFillObject} onPress={closeOverlayItemFromRN} />
-                {activeOverlay?.itemNode}
-              </Animated.View>
-            </Animated.View>
+          <Animated.View
+            pointerEvents="box-none"
+            style={[
+              {
+                zIndex: 9999,
+                position: 'absolute',
+                top: activeOverlay?.itemRectY?.value || 0,
+                left: 0,
+                width: WINDOW_WIDTH,
+                overflow: 'visible',
+              },
+              animatedWrapperStyle
+            ]}
+          >
+            <View
+              style={[
+                styles.overlayItemRow,
+                {
+                  minHeight: activeOverlay?.itemRectHeight?.value || 0,
+                  width: activeOverlay?.itemRectWidth?.value || 0,
+                  marginLeft: Math.max(0, activeOverlay?.itemRectX?.value || 0),
+                  alignItems: 'flex-start',
+                }
+              ]}
+            >
+              <Pressable style={StyleSheet.absoluteFillObject} onPress={closeOverlayItemFromRN} />
+              {activeOverlay?.itemNode}
+            </View>
+          </Animated.View>
           <Menu />
         </View>
       </Modal>
@@ -319,6 +296,6 @@ export default Provider;
 
 const styles = StyleSheet.create({
   overlayItemRow: {
-    position: 'relative',
+    // position: 'relative',
   },
 });
